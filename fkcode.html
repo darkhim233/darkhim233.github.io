@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>CBC 解密工具</title>
+</head>
+<body>
+  <h2>解密 CBC 数据</h2>
+  <textarea id="input" rows="10" cols="100" placeholder="输入以2423开头的加密数据"></textarea><br>
+  <button onclick="decrypt()">解密</button>
+  <pre id="output"></pre>
+
+  <script>
+    function hexToBytes(hex) {
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < hex.length; i += 2) {
+        bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+      }
+      return bytes;
+    }
+
+    function padEnd(str) {
+      return (str + '0000000000000000').substring(0, 16);
+    }
+
+    async function decrypt() {
+      const input = document.getElementById('input').value.trim();
+      if (!input.startsWith("2423")) {
+        document.getElementById('output').textContent = "数据不是CBC格式（应以2423开头）";
+        return;
+      }
+
+      const fullBytes = hexToBytes(input);
+      const decodedStr = new TextDecoder().decode(fullBytes).toLowerCase();
+
+      const keyStart = decodedStr.indexOf('$#') + 2;
+      const keyEnd = decodedStr.indexOf('#$');
+      const keyRaw = decodedStr.substring(keyStart, keyEnd);
+      const key = padEnd(keyRaw);
+
+      const ivRaw = decodedStr.substring(decodedStr.length - 13);
+      const iv = padEnd(ivRaw);
+
+      const cipherHex = input.substring(input.indexOf("2324") + 4, input.length - 26);
+      const cipherBytes = hexToBytes(cipherHex);
+
+      const keyBytes = new TextEncoder().encode(key);
+      const ivBytes = new TextEncoder().encode(iv);
+
+      const cryptoKey = await crypto.subtle.importKey(
+        'raw', keyBytes, { name: 'AES-CBC' }, false, ['decrypt']
+      );
+
+      try {
+        const decrypted = await crypto.subtle.decrypt(
+          { name: 'AES-CBC', iv: ivBytes },
+          cryptoKey,
+          cipherBytes
+        );
+
+        const result = new TextDecoder().decode(decrypted);
+        document.getElementById('output').textContent = result;
+      } catch (e) {
+        document.getElementById('output').textContent = "解密失败：" + e.message;
+      }
+    }
+  </script>
+</body>
+</html>
